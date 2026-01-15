@@ -1,4 +1,5 @@
 #include "mininec3_loader.hpp"
+#include "mininec3_state.hpp"
 #include <fstream>
 #include <sstream>
 #include <iostream>

@@ -3,6 +3,7 @@
 #include <cmath>
 #include "mininec3_compat.hpp"
 #include "mininec3_loader.hpp"
+#include "mininec3_state.hpp"
 
 // st.Qbasic = {
 //     0.288675135, 0.5,
