@@ -202,6 +202,14 @@ void Mininec3Compat::psiVector(double P1, double P2, double P3, int P4, int Kimg
 {
     int FVS = 0;
 
+    if (P4 == 0)
+    {
+        st_.T1 = 0.0;
+        st_.T2 = 0.0;
+        return;
+    }
+
+
     // BASIC 103–108 special case
     if (Kimg >= 1)
     {
@@ -229,6 +237,13 @@ void Mininec3Compat::psiScalar(double P1, double P2, double P3, int P4, int Kimg
     // BASIC 87
     int FVS = 1;
     (void)FVS; // används i 102 för exact-kernel val, vi tar in senare
+
+    if (P4 == 0)
+    {
+        st_.T1 = 0.0;
+        st_.T2 = 0.0;
+        return;
+    }
 
     // BASIC 88–93: thin-wire scalar self special
     if (Kimg >= 1)
@@ -483,6 +498,8 @@ void Mininec3Compat::buildZ()
     }
 }
 
+
+/*
 Vec3 Mininec3Compat::pointFromP(double P, int wireIndex, int Kimg) const
 {
     const auto& nodes = st_.wireNodes.at(wireIndex);
@@ -529,8 +546,9 @@ Vec3 Mininec3Compat::pointFromP(double P, int wireIndex, int Kimg) const
     // Fallback: treat as node
     return nodePos(nodes.at(i));
 }
+*/
 
-
+/*
 static const double Q7[7] = {
     -0.9491079123427585,
     -0.7415311855993945,
@@ -550,7 +568,9 @@ static const double W7[7] = {
     0.2797053914892766,
     0.1294849661688697
 };
+*/
 
+/*
 void Mininec3Compat::psiGaussCoreCompat(double P1, double P2, double P3, int P4, int Kimg)
 {
     // Map wire indices:
@@ -616,7 +636,9 @@ void Mininec3Compat::psiGaussCoreCompat(double P1, double P2, double P3, int P4,
     st_.T1 = T1 * scale;
     st_.T2 = T2 * scale;
 }
+*/
 
+/*
 Vec3 Mininec3Compat::pointFromGlobalP(double Pglobal, int wireIndex, int Kimg) const
 {
     const auto& nodes = st_.wireNodes.at(wireIndex);
@@ -662,6 +684,7 @@ Vec3 Mininec3Compat::pointFromGlobalP(double Pglobal, int wireIndex, int Kimg) c
     // Unexpected fractional part
     return nodePos(nodes.at(i));
 }
+*/
 
 Vec3 Mininec3Compat::pointFromP_Basic(double P, int Kimg) const
 {

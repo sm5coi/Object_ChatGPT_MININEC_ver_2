@@ -6,12 +6,13 @@
 #include <cmath>
 #include <algorithm>
 
-
+/*
 static double dist3(double x1,double y1,double z1,double x2,double y2,double z2)
 {
     double dx=x2-x1, dy=y2-y1, dz=z2-z1;
     return std::sqrt(dx*dx+dy*dy+dz*dz);
 }
+*/
 
 bool Mininec3Loader::loadFromFile(const std::string& filename, Mininec3State& st)
 {
@@ -222,7 +223,7 @@ static int sgnInt(int v) { return (v >= 0) ? +1 : -1; }
 
 void Mininec3Loader::buildMininecConnectivity(const std::vector<WireDef>& wires, Mininec3State& st)
 {
-    st = Mininec3State();
+    // st = Mininec3State();
 
     st.NW = (int)wires.size();
     st.Gmode = 1; // user requested G=1
