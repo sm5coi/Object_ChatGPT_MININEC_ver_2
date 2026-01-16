@@ -1,4 +1,4 @@
-#ifndef MININEC3_STATE_HPP
+﻿#ifndef MININEC3_STATE_HPP
 #define MININEC3_STATE_HPP
 
 #include <vector>
@@ -15,6 +15,7 @@ struct Mininec3State
     int curI = 0;
     int curJ = 0;
 
+    double fq = 0.0; // Frequency in Hz
     double W = 0.0;
     double W2 = 0.0;
     double SRM = 0.0;

@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.16)
+﻿cmake_minimum_required(VERSION 3.16)
 
 project(Object_ChatGPT_MININEC_ver_2 LANGUAGES CXX)
 
@@ -11,7 +11,9 @@ add_executable(Object_ChatGPT_MININEC_ver_2 main.cpp
     vec3.hpp
     mininec3_loader.hpp
     mininec3_loader.cpp
-    mininec3_state.hpp)
+    mininec3_state.hpp
+    frequencyInput.hpp
+    frequencyInput.cpp)
 
 include(GNUInstallDirs)
 install(TARGETS Object_ChatGPT_MININEC_ver_2

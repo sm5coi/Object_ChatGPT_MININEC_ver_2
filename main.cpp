@@ -1,24 +1,26 @@
-#include <iostream>
+﻿#include <iostream>
 #include <iomanip>
 #include <cmath>
 #include "mininec3_compat.hpp"
 #include "mininec3_loader.hpp"
 #include "mininec3_state.hpp"
+#include "frequencyInput.hpp"
 
-// st.Qbasic = {
-//     0.288675135, 0.5,
-//     0.430568156, 0.173927423,
-//     0.169990522, 0.326072577,
-//     0.480144928, 0.050614268,
-//     0.398333239, 0.111190517,
-//     0.262766205, 0.156853323,
-//     0.091717321, 0.181341892
-// };
+
 
 
 int main()
 {
     Mininec3State st;
+
+    // Skapa objekt med klassen FrequencyInput
+    frequencyInput input1(440.0, "Hz");   // Frekvens 440 Hz
+    frequencyInput input2(1.0, "kHz");   // Frekvens 1 kHz
+
+    // Använda metod från klassen
+    input1.display();
+    input2.display();
+
 
     if (!Mininec3Loader::loadFromFile("geom.txt", st))
     {
