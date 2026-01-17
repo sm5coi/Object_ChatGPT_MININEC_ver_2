@@ -15,10 +15,13 @@ struct Mininec3State
     int curI = 0;
     int curJ = 0;
 
-    double fq = 0.0; // Frequency in Hz
-    double W = 0.0;
-    double W2 = 0.0;
-    double SRM = 0.0;
+    double fq = 0.0;            // Frequency in Hz
+    double lambda = 0.0;        // 299.8/fq (MHz)
+    double Mw = 0.0;            // 1140 REM -- M = 1 / (4 * PI * OMEGA * EPSILON)
+    double W = 0.0;             // k = (2*pi)/lambda
+    double W2 = 0.0;            // (k^2)/2
+    double SRM = 0.0;           // 0.0001*lambda
+    double c0 = 299792458.0;    // speed of light
 
     std::vector<std::array<int,2>> C;
 
@@ -47,7 +50,17 @@ struct Mininec3State
     int Gmode = 1;
     int NW = 0;
 
-    std::array<double, 14> Qbasic{};
+    //std::array<double, 14> Qbasic{};
+
+    std::array<double, 14> Qbasic{
+        0.288675135, 0.5,
+        0.430568156, 0.173927423,
+        0.169990522, 0.326072577,
+        0.480144928, 0.050614268,
+        0.398333239, 0.111190517,
+        0.262766205, 0.156853323,
+        0.091717321, 0.181341892
+    };
 };
 
 #endif // MININEC3_STATE_HPP

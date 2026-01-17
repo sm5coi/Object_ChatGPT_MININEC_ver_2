@@ -1,4 +1,4 @@
-#include "mininec3_loader.hpp"
+﻿#include "mininec3_loader.hpp"
 #include "mininec3_state.hpp"
 #include <fstream>
 #include <sstream>
@@ -6,14 +6,6 @@
 #include <stdexcept>
 #include <cmath>
 #include <algorithm>
-
-/*
-static double dist3(double x1,double y1,double z1,double x2,double y2,double z2)
-{
-    double dx=x2-x1, dy=y2-y1, dz=z2-z1;
-    return std::sqrt(dx*dx+dy*dy+dz*dz);
-}
-*/
 
 bool Mininec3Loader::loadFromFile(const std::string& filename, Mininec3State& st)
 {
@@ -88,137 +80,6 @@ bool Mininec3Loader::parseFile(const std::string& filename, std::vector<WireDef>
 
     return true;
 }
-
-/*
-void Mininec3Loader::buildStateFromWires(const std::vector<WireDef>& wires, Mininec3State& st)
-{
-    // Reset state
-    st = Mininec3State();
-
-    int nWires = (int)wires.size();
-    st.wireNodes.resize(nWires);
-    st.wireBaseP.resize(nWires);
-
-    // We'll build global nodes and global segments
-    int nodeCounter = 0;
-    int segCounter  = 0;
-
-    // We need per-segment arrays sized later
-    // But we also need mapping from (wire, localSeg) -> globalSegId
-    std::vector<std::vector<int>> wireSegId(nWires);
-
-    // ---- Build nodes + wireNodes + wireBaseP ----
-    for (int w = 0; w < nWires; ++w)
-    {
-        const auto& wd = wires[w];
-
-        int nNodes = wd.nSeg + 1;
-
-        // BaseP is global node offset in our "global P space"
-        st.wireBaseP[w] = nodeCounter;
-
-        st.wireNodes[w].resize(nNodes);
-
-        for (int i = 0; i < nNodes; ++i)
-        {
-            double t = (wd.nSeg == 0) ? 0.0 : (double)i / (double)wd.nSeg;
-
-            double x = wd.x1 + (wd.x2 - wd.x1) * t;
-            double y = wd.y1 + (wd.y2 - wd.y1) * t;
-            double z = wd.z1 + (wd.z2 - wd.z1) * t;
-
-            int nodeId = nodeCounter++;
-            st.wireNodes[w][i] = nodeId;
-
-            st.X.push_back(x);
-            st.Y.push_back(y);
-            st.Z.push_back(z);
-        }
-
-        wireSegId[w].resize(wd.nSeg);
-        for (int s = 0; s < wd.nSeg; ++s)
-            wireSegId[w][s] = segCounter++;
-    }
-
-    int totalSeg = segCounter;
-
-    // Allocate per-segment arrays
-    st.S.assign(totalSeg, 0.0);
-    st.A.assign(totalSeg, 0.0);
-    st.CA.assign(totalSeg, 0.0);
-    st.CB.assign(totalSeg, 0.0);
-    st.CG.assign(totalSeg, 0.0);
-
-    // ---- Fill per-segment arrays ----
-    for (int w = 0; w < nWires; ++w)
-    {
-        const auto& wd = wires[w];
-
-        for (int s = 0; s < wd.nSeg; ++s)
-        {
-            int n0 = st.wireNodes[w][s];
-            int n1 = st.wireNodes[w][s + 1];
-
-            double x0 = st.X[n0], y0 = st.Y[n0], z0 = st.Z[n0];
-            double x1 = st.X[n1], y1 = st.Y[n1], z1 = st.Z[n1];
-
-            double len = dist3(x0,y0,z0, x1,y1,z1);
-            if (len < 1e-12) len = 1e-12;
-
-            double dx = (x1 - x0) / len;
-            double dy = (y1 - y0) / len;
-            double dz = (z1 - z0) / len;
-
-            int segId = wireSegId[w][s];
-
-            st.S[segId]  = len;
-            st.A[segId]  = wd.radius;
-            st.CA[segId] = dx;
-            st.CB[segId] = dy;
-            st.CG[segId] = dz;
-        }
-    }
-
-    // ---- Build pulses C% and W% ----
-    // For each wire with Ns segments => Np = Ns - 1 pulses
-    // Pulse p uses segments (s, s+1)
-    std::vector<std::array<int,2>> C;
-    std::vector<int> Wpulse;
-
-    for (int w = 0; w < nWires; ++w)
-    {
-        int Ns = wires[w].nSeg;
-        int Np = std::max(0, Ns - 1);
-
-        for (int p = 0; p < Np; ++p)
-        {
-            int seg1 = wireSegId[w][p];
-            int seg2 = wireSegId[w][p + 1];
-
-            C.push_back({seg1, seg2});
-            Wpulse.push_back(w);
-        }
-    }
-
-    st.C = std::move(C);
-    st.Wpulse = std::move(Wpulse);
-    st.N = (int)st.C.size();
-
-    // Allocate Z matrices
-    st.ZR.assign(st.N, std::vector<double>(st.N, 0.0));
-    st.ZI.assign(st.N, std::vector<double>(st.N, 0.0));
-
-    // SRM is typically 2*radius in MININEC
-    // Here we just set it to 2*min(radius) as a first approximation
-    double minR = 1e9;
-    for (const auto& wd : wires)
-        minR = std::min(minR, wd.radius);
-    if (minR > 0 && minR < 1e8)
-        st.SRM = 2.0 * minR;
-    else
-        st.SRM = 1e-6;
-}
-*/
 
 static int sgnInt(int v) { return (v >= 0) ? +1 : -1; }
 
@@ -471,15 +332,4 @@ void Mininec3Loader::buildMininecConnectivity(const std::vector<WireDef>& wires,
     // Allocate Z matrices
     st.ZR.assign(st.N, std::vector<double>(st.N, 0.0));
     st.ZI.assign(st.N, std::vector<double>(st.N, 0.0));
-
-    // ---- SRM (MININEC effective radius floor) ----
-    double minR = 1e9;
-    for (int i = 1; i <= st.NW; ++i)
-        minR = std::min(minR, st.A[i]);
-
-    if (minR > 0.0 && minR < 1e8)
-        st.SRM = 2.0 * minR;
-    else
-        st.SRM = 1e-6;
-
 }

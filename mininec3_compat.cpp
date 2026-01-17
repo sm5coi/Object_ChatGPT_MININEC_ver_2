@@ -1,4 +1,4 @@
-#include "mininec3_compat.hpp"
+﻿#include "mininec3_compat.hpp"
 #include "mininec3_state.hpp"
 #include <iostream>
 
@@ -90,8 +90,8 @@ void Mininec3Compat::kernel28(double T, int Kimg, int P4,
         D = std::sqrt(D3 + A2);
     }
 
-    double Dmin = (st_.SRM > 0.0) ? st_.SRM : 1e-6;
-    if (D < Dmin) D = Dmin;
+    // double Dmin = (st_.SRM > 0.0) ? st_.SRM : 1e-6;
+    // if (D < Dmin) D = Dmin;
 
     // BASIC 42–48 exact kernel branch (elliptic integral approx)
     // if (I6 != 0.0)
@@ -429,16 +429,6 @@ void Mininec3Compat::applySymmetryAndToeplitzCopy(int I, int J, int F8, int J2)
 
 void Mininec3Compat::buildZ()
 {
-    st_.Qbasic = {
-        0.288675135, 0.5,
-        0.430568156, 0.173927423,
-        0.169990522, 0.326072577,
-        0.480144928, 0.050614268,
-        0.398333239, 0.111190517,
-        0.262766205, 0.156853323,
-        0.091717321, 0.181341892
-    };
-
     for (int I = 0; I < st_.N; ++I)
     {
         computeObsDeltaR(I);

@@ -1,4 +1,4 @@
-#ifndef MININEC3_COMPAT_HPP
+﻿#ifndef MININEC3_COMPAT_HPP
 #define MININEC3_COMPAT_HPP
 
 #include "mininec3_state.hpp"
@@ -11,8 +11,6 @@ public:
     explicit Mininec3Compat(Mininec3State& st) : st_(st) {}
 
     void buildZ();
-
-    void psiGaussCoreCompat(double P1, double P2, double P3, int P4, int Kimg);
 
 private:
     Mininec3State& st_;

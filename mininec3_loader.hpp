@@ -1,8 +1,8 @@
-#ifndef MININEC3_LOADER_HPP
+﻿#ifndef MININEC3_LOADER_HPP
 #define MININEC3_LOADER_HPP
 
 #include "mininec3_state.hpp"
-//#include "mininec3_compat.hpp"
+
 #include <string>
 
 struct WireDef
