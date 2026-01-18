@@ -2,6 +2,8 @@
 #include "mininec3_state.hpp"
 #include <iostream>
 
+static int hits = 0;
+
 void Mininec3Compat::computeObsDeltaR(int I)
 {
     int c1 = st_.C[I][0];
@@ -121,11 +123,16 @@ void Mininec3Compat::psiCore102_28(const Vec3& X1,
                                    int FVS)
 {
     // BASIC 112–134: build X2 and V relative to X1
-    Vec3 Ru = pointFromP_Basic(P2, Kimg);
-    Vec3 Rv = pointFromP_Basic(P3, Kimg);
+    Vec3 Ru = pointFromP_Basic(P2, +1); // ospeglad punkt
+    Vec3 Rv = pointFromP_Basic(P3, +1); // ospeglad punkt
+
+    // BASIC: Z2 = K*Z(P2) - Z1, V3 = K*Z(P3) - Z1
+    Ru.z *= (double)Kimg;
+    Rv.z *= (double)Kimg;
 
     Vec3 X2 = Ru - X1;
     Vec3 V  = Rv - X1;
+
 
     // BASIC 135–139
     double D0 = std::sqrt(X2.x*X2.x + X2.y*X2.y + X2.z*X2.z);
@@ -196,6 +203,12 @@ void Mininec3Compat::psiCore102_28(const Vec3& X1,
     st_.T2 = S4 * T2sum;
 
     (void)FVS; // används först när vi lägger in exact-kernel
+
+    if (Kimg < 0) {
+        std::cout << "K=-1: X1.z=" << X1.z
+                  << " Ru.z(beforeK?)=" << (Ru.z/(double)Kimg)
+                  << " Ru.z(after)=" << Ru.z << "\n";
+    }
 }
 
 
@@ -216,8 +229,15 @@ void Mininec3Compat::psiVector(double P1, double P2, double P3, int P4, int Kimg
     {
         if (st_.A[P4] < st_.SRM)
         {
-            if (st_.curI == st_.curJ && std::abs(P3 - (P2 + 0.5)) < 1e-9)
+            auto isHalfStep = [&](double a, double b) {
+                return std::abs((a - b) - 0.5) < 1e-6;
+            };
+
+            if (st_.curI == st_.curJ && isHalfStep(P3, P2))
             {
+                ++hits;
+                std::cout << "hits = " << hits << std::endl;
+
                 st_.T1 = std::log(st_.S[P4] / st_.A[P4]);
                 st_.T2 = -st_.W * st_.S[P4] / 2.0;
                 return;
@@ -226,7 +246,7 @@ void Mininec3Compat::psiVector(double P1, double P2, double P3, int P4, int Kimg
     }
 
     // BASIC 109–111: X1 = X(P1) (integer point)
-    Vec3 X1 = pointFromP_Basic(P1, Kimg);
+    Vec3 X1 = pointFromP_Basic(P1, +1);
 
     // jump to core (BASIC 113)
     psiCore102_28(X1, P2, P3, P4, Kimg, FVS);
@@ -401,31 +421,52 @@ void Mininec3Compat::computeZijForImage(int I, int J, int K,
 }
 
 
+// void Mininec3Compat::applySymmetryAndToeplitzCopy(int I, int J, int F8, int J2)
+// {
+//     if (J < I) return;
+
+//     if (J >= I) {
+//         st_.ZR[J][I] = st_.ZR[I][J];
+//         st_.ZI[J][I] = st_.ZI[I][J];
+//     }
+//     if (F8 == 0) return;
+
+//     // if (F8 == 0) return;
+
+//     // st_.ZR[J][I] = st_.ZR[I][J];
+//     // st_.ZI[J][I] = st_.ZI[I][J];
+
+//     int P1 = J + 1;
+//     if (P1 >= st_.N) return;
+
+//     if (st_.C[P1][0] != st_.C[P1][1]) return;
+
+//     if (st_.C[P1][1] != st_.C[J][1])
+//     {
+//         if (st_.C[P1][1] != -st_.C[J][1]) return;
+//         // if ((st_.CA[J2] + st_.CB[J2]) != 0) return;
+//         if (std::abs(st_.CA[J2] + st_.CB[J2]) > 1e-12) return;
+//     }
+
+//     int P2 = I + 1;
+//     if (P2 >= st_.N) return;
+
+//     st_.ZR[P2][P1] = st_.ZR[I][J];
+//     st_.ZI[P2][P1] = st_.ZI[I][J];
+// }
+
 void Mininec3Compat::applySymmetryAndToeplitzCopy(int I, int J, int F8, int J2)
 {
     if (J < I) return;
-    if (F8 == 0) return;
 
+    // alltid symmetri
     st_.ZR[J][I] = st_.ZR[I][J];
     st_.ZI[J][I] = st_.ZI[I][J];
 
-    int P1 = J + 1;
-    if (P1 >= st_.N) return;
-
-    if (st_.C[P1][0] != st_.C[P1][1]) return;
-
-    if (st_.C[P1][1] != st_.C[J][1])
-    {
-        if (st_.C[P1][1] != -st_.C[J][1]) return;
-        if ((st_.CA[J2] + st_.CB[J2]) != 0) return;
-    }
-
-    int P2 = I + 1;
-    if (P2 >= st_.N) return;
-
-    st_.ZR[P2][P1] = st_.ZR[I][J];
-    st_.ZI[P2][P1] = st_.ZI[I][J];
+    // DEBUG: stäng av Toeplitz-copy
+    return;
 }
+
 
 void Mininec3Compat::buildZ()
 {
@@ -440,9 +481,11 @@ void Mininec3Compat::buildZ()
 
         for (int J = 0; J < st_.N; ++J)
         {
+            st_.curI = I + 1;
+            st_.curJ = J + 1;
+
             int cJ1 = st_.C[J][0];
             int cJ2 = st_.C[J][1];
-
             int J1 = std::abs(cJ1);
             int J2 = std::abs(cJ2);
 
@@ -452,49 +495,45 @@ void Mininec3Compat::buildZ()
             double F6 = 1.0;
             double F7 = 1.0;
 
-            for (int K : {+1, -1})
+            // Beräkna F8 en gång (för hela (I,J))
+            int F8 = computeF8flag(I, J, I1, I2, J1, J2);
+
+            // Nollställ innan vi summerar K
+            st_.ZR[I][J] = 0.0;
+            st_.ZI[I][J] = 0.0;
+
+            st_.WpulseScratchObs = st_.Wpulse[I];
+            st_.WpulseScratchSrc = st_.Wpulse[J];
+
+            if (cJ1 == -cJ2)
             {
-                if (cJ1 == -cJ2)
-                {
-                    if (K < 0) break;
-                    F6 = F4;
-                    F7 = F5;
-                }
-
-                int F8 = 0;
-                if (K >= 0)
-                    F8 = computeF8flag(I, J, I1, I2, J1, J2);
-
-                if (st_.ZR[I][J] != 0.0)
-                {
-                    // NOTE: BASIC optimization:
-                    // applySymmetryAndToeplitzCopy() forces reciprocity + Toeplitz reuse.
-                    // Disable temporarily if you want to debug raw asymmetry.
-                    applySymmetryAndToeplitzCopy(I, J, F8, J2);
-                    continue;
-                }
-
-                st_.WpulseScratchObs = st_.Wpulse[I];
-                st_.WpulseScratchSrc = st_.Wpulse[J];
-
-
-                computeZijForImage(I, J, K, I1, I2, J1, J2, F4, F5, F6, F7, F8);
-
-                // NOTE: BASIC optimization:
-                // applySymmetryAndToeplitzCopy() forces reciprocity + Toeplitz reuse.
-                // Disable temporarily if you want to debug raw asymmetry.
-                applySymmetryAndToeplitzCopy(I, J, F8, J2);
+                // special: bara K=+1
+                F6 = F4;
+                F7 = F5;
+                computeZijForImage(I, J, +1, I1, I2, J1, J2, F4, F5, F6, F7, F8);
             }
+            else
+            {
+                // normal: summera K=+1 och K=-1
+                computeZijForImage(I, J, +1, I1, I2, J1, J2, F4, F5, F6, F7, F8);
+                computeZijForImage(I, J, -1, I1, I2, J1, J2, F4, F5, F6, F7, F8);
+            }
+
+            // Kopiera först när Z[I][J] är färdig
+            applySymmetryAndToeplitzCopy(I, J, F8, J2);
         }
     }
+
+    std::cout << " BuildZ:  No of hits = " << hits << std::endl;
+
 }
 
-Vec3 Mininec3Compat::pointFromP_Basic(double P, int Kimg) const
+Vec3 Mininec3Compat::pointFromP_Basic(double P, int /*Kimg*/) const
 {
     auto bp = [&](int idx) -> Vec3 {
         if (idx < 0 || idx >= (int)st_.BX.size())
             throw std::out_of_range("Breakpoint index out of range");
-        return Vec3(st_.BX[idx], st_.BY[idx], st_.BZ[idx] * (double)Kimg);
+        return Vec3(st_.BX[idx], st_.BY[idx], st_.BZ[idx]);
     };
 
     double iFloor = std::floor(P + 1e-12);
@@ -510,3 +549,5 @@ Vec3 Mininec3Compat::pointFromP_Basic(double P, int Kimg) const
     // fallback
     return bp(i);
 }
+
+

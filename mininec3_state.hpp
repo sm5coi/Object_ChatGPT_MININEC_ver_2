@@ -12,8 +12,8 @@ struct Mininec3State
     int WpulseScratchObs = 0;
     int WpulseScratchSrc = 0;
 
-    int curI = 0;
-    int curJ = 0;
+    int curI = 0;   // nuvarande observationspuls
+    int curJ = 0;   // nuvarande källpuls
 
     double fq = 0.0;            // Frequency in Hz
     double lambda = 0.0;        // 299.8/fq (MHz)
