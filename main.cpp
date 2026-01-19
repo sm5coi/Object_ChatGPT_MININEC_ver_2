@@ -33,6 +33,12 @@ int main()
     std::cout << "  BX size   = " << st.BX.size() << "\n";
     std::cout << "  SRM       = " << st.SRM << "\n";
 
+    std::cout << "lambda=" << st.lambda
+              << " W=" << st.W
+              << " W2=" << st.W2
+              << " SRM=" << st.SRM << "\n";
+
+
     Mininec3Compat solver(st);
 
     std::cout << "C matrix:\n";

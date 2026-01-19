@@ -3,6 +3,7 @@
 #include <fstream>
 #include <sstream>
 #include <iostream>
+#include <iomanip>
 #include <stdexcept>
 #include <cmath>
 #include <algorithm>
@@ -14,6 +15,24 @@ bool Mininec3Loader::loadFromFile(const std::string& filename, Mininec3State& st
         return false;
 
     buildMininecConnectivity(wires, st);
+
+    int I = 1;
+
+    std::cout << "WIRE NO."
+              << std::setw(3) << I
+              << "\t COORDINATES\t\t\t\t\t\t  CONNECTION\tPULSE\n";
+
+    std::cout << "  X      Y      Z    RADIUS\tEND 1\tEND 2\t NO.\n";
+
+
+    std::cout << std::setw(8) << st.BX[1] << "\t"
+              << std::setw(8) << st.BY[1] << "\t"
+              << std::setw(8) << st.BZ[1] << "\t"
+              << std::setw(8) << st.A[1] << "\t"
+              << std::setw(4) << st.C[1][0] << "\t"
+              << std::setw(4) << st.C[1][1] << "\t"
+              << std::setw(4) << I << "\n";
+
     return true;
 }
 

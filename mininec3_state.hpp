@@ -6,6 +6,8 @@
 
 struct Mininec3State
 {
+    int psiVectorHits = 0;
+
     int N = 0;     // number of pulses
     int G = 1;     // image loop flag (usually 1)
 

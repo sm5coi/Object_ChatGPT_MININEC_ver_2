@@ -26,39 +26,30 @@ void Mininec3Compat::computeObsDeltaR(int I)
 // BASIC 235–245
 int Mininec3Compat::computeF8flag(int I, int J, int I1, int I2, int J1, int J2) const
 {
-    // BASIC 235-245 (only evaluated for K>0 in caller)
-
-    // Default
     int F8 = 0;
 
-    // IF I1 <> I2 THEN 246
     if (I1 != I2) return 0;
 
-    // IF (CA(I1) + CB(I1)) = 0 THEN 241
-    if ((st_.CA[I1] + st_.CB[I1]) != 0.0)
+    constexpr double eps = 1e-12;
+
+    if (std::abs(st_.CA[I1] + st_.CB[I1]) > eps)
     {
-        // IF C%(I,1) <> C%(I,2) THEN 246
         if (st_.C[I][0] != st_.C[I][1]) return 0;
     }
 
-    // IF J1 <> J2 THEN 246
     if (J1 != J2) return 0;
 
-    // IF (CA(J1) + CB(J1)) = 0 THEN 244
-    if ((st_.CA[J1] + st_.CB[J1]) != 0.0)
+    if (std::abs(st_.CA[J1] + st_.CB[J1]) > eps)
     {
-        // IF C%(J,1) <> C%(J,2) THEN 246
         if (st_.C[J][0] != st_.C[J][1]) return 0;
     }
 
-    // IF I1 = J1 THEN F8 = 1
     if (I1 == J1) F8 = 1;
-
-    // IF I = J THEN F8 = 2
-    if (I == J) F8 = 2;
+    if (I == J)   F8 = 2;
 
     return F8;
 }
+
 
 void Mininec3Compat::kernel28(double T, int Kimg, int P4,
                               const Vec3& X2, const Vec3& V,
@@ -122,60 +113,144 @@ void Mininec3Compat::psiCore102_28(const Vec3& X1,
                                    int P4, int Kimg,
                                    int FVS)
 {
+    // ------------------------------------------------------------
     // BASIC 112–134: build X2 and V relative to X1
-    Vec3 Ru = pointFromP_Basic(P2, +1); // ospeglad punkt
-    Vec3 Rv = pointFromP_Basic(P3, +1); // ospeglad punkt
+    // ------------------------------------------------------------
 
-    // BASIC: Z2 = K*Z(P2) - Z1, V3 = K*Z(P3) - Z1
+    // IMPORTANT: BASIC uses:
+    //   X1,Y1,Z1 = observation point (NOT multiplied by K)
+    //   Z(P2), Z(P3) are multiplied by K before subtracting Z1
+    //
+    // We already pass X1 as un-imaged point from psiVector/psiScalar.
+    // Now we fetch Ru/Rv WITHOUT image and apply K only to z.
+    Vec3 Ru = pointFromP_Basic(P2, +1); // no image here
+    Vec3 Rv = pointFromP_Basic(P3, +1); // no image here
+
     Ru.z *= (double)Kimg;
     Rv.z *= (double)Kimg;
 
     Vec3 X2 = Ru - X1;
     Vec3 V  = Rv - X1;
 
-
-    // BASIC 135–139
+    // ------------------------------------------------------------
+    // BASIC 135–139: D0 and D3 magnitudes
+    // ------------------------------------------------------------
     double D0 = std::sqrt(X2.x*X2.x + X2.y*X2.y + X2.z*X2.z);
     double D3 = std::sqrt(V.x*V.x  + V.y*V.y  + V.z*V.z);
 
-    // BASIC 141
+    // ------------------------------------------------------------
+    // BASIC 141: A2 = A(P4)^2
+    // ------------------------------------------------------------
     double A2 = st_.A[P4] * st_.A[P4];
 
-    // BASIC 143–151
+    // ------------------------------------------------------------
+    // BASIC 143: S4 = (P3 - P2)*S(P4)
+    // ------------------------------------------------------------
     double S4 = (P3 - P2) * st_.S[P4];
-    double F2 = 1.0;
-    int L = 7;
 
-    double Tcrit = (D0 + D3) / st_.S[P4];
-
-    // BASIC 153–166: choose integration order
-    // (NOTE: BASIC uses L=7 initially, then maybe L=3 or L=1)
-    if (Tcrit > 6.0)  L = 3;
-    if (Tcrit > 10.0) L = 1;
-
-    // BASIC 148,163
-    double I6 = 0.0;
-
-    // BASIC 153–164: exact-kernel branch (we can add later)
-    // It requires:
-    // - C$ != "N"
-    // - connectivity compare using J2(W%(I),1/2)
-    // - and radius/SRM tests + FVS handling
-    //
-    // For now: skip (I6 stays 0)
-
-    // BASIC 167–180
+    // ------------------------------------------------------------
+    // BASIC 146–151 init
+    // ------------------------------------------------------------
     double T1sum = 0.0;
     double T2sum = 0.0;
 
-    // BASIC uses packed Q() array.
-    // We'll store it 0-based in st_.Qbasic[0..13].
+    double I6 = 0.0;   // BASIC I6! (exact kernel add-on)
+    double F2 = 1.0;   // BASIC F2
+
+    int L = 7;         // BASIC default quadrature order
+    double Tcrit = (D0 + D3) / st_.S[P4];  // BASIC 151
+
+    // ------------------------------------------------------------
+    // BASIC 153–164: EXACT KERNEL CRITERIA
+    // ------------------------------------------------------------
+    // BASIC also checks "C$ = N" to disable exact kernel.
+    // We assume enabled for now.
+    bool exactKernelEnabled = true;
+
+    bool usedExactKernel = false;
+
+    if (Tcrit <= 1.1 && exactKernelEnabled)
+    {
+        // BASIC checks junction connectivity:
+        //   J2(W%(I),1/2) compared to J2(W%(J),1/2)
+        //
+        // We use the scratch wires set in buildZ():
+        //   st_.WpulseScratchObs = W%(I)
+        //   st_.WpulseScratchSrc = W%(J)
+        int wI = st_.WpulseScratchObs;
+        int wJ = st_.WpulseScratchSrc;
+
+        int a1 = st_.J2[wI][0];
+        int a2 = st_.J2[wI][1];
+        int b1 = st_.J2[wJ][0];
+        int b2 = st_.J2[wJ][1];
+
+        bool shareJunction =
+            (a1 == b1) || (a1 == b2) || (a2 == b1) || (a2 == b2);
+
+        if (shareJunction)
+        {
+            // BASIC 160–161: if small radius -> jump to thin-wire self special
+            if (st_.A[P4] <= st_.SRM)
+            {
+                // BASIC:
+                //   IF FVS = 1 THEN 91 ELSE GOTO 106
+                // i.e. scalar uses 2*log, vector uses log.
+                if (FVS == 1)
+                {
+                    // BASIC 91–93
+                    st_.T1 = 2.0 * std::log(st_.S[P4] / st_.A[P4]);
+                    st_.T2 = -st_.W * st_.S[P4];
+                    return;
+                }
+                else
+                {
+                    // BASIC 106–108
+                    st_.T1 = std::log(st_.S[P4] / st_.A[P4]);
+                    st_.T2 = -st_.W * st_.S[P4] / 2.0;
+                    return;
+                }
+            }
+
+            // BASIC 162
+            F2 = 2.0 * (P3 - P2);
+
+            // BASIC 163:
+            // I6! = (1 - LOG(S4 / F2 / 8 / A(P4))) / P / A(P4)
+            // where P = pi
+            double denom = (F2 * 8.0 * st_.A[P4]);
+            if (denom <= 0.0) denom = 1e-30;
+
+            double arg = S4 / denom;
+            if (arg <= 0.0) arg = 1e-30;
+
+            I6 = (1.0 - std::log(arg)) / (M_PI * st_.A[P4]);
+
+            usedExactKernel = true;
+        }
+    }
+
+    // ------------------------------------------------------------
+    // BASIC 165–166: choose integration order (only if NOT exact kernel)
+    // ------------------------------------------------------------
+    if (!usedExactKernel)
+    {
+        if (Tcrit > 6.0)  L = 3;
+        if (Tcrit > 10.0) L = 1;
+    }
+
+    // ------------------------------------------------------------
+    // BASIC 167–178: Gaussian quadrature loop using packed Q()
+    // ------------------------------------------------------------
     auto Q = [&](int idx1based) -> double {
         return st_.Qbasic[idx1based - 1];
     };
 
-    int I5 = L + L; // 2*L
-    int idx = L;    // BASIC L is reused as index into Q()
+    int I5 = L + L; // BASIC 167: I5 = L + L
+
+    // BASIC uses L as an index into Q and increments it inside the loop.
+    // We'll mimic that exactly using idx = L.
+    int idx = L;
 
     while (idx < I5)
     {
@@ -194,26 +269,25 @@ void Mininec3Compat::psiCore102_28(const Vec3& X1,
         T1sum += Q(idx) * T3;
         T2sum += Q(idx) * T4;
 
-        // BASIC 177–178
+        // BASIC 177
         idx = idx + 1;
     }
 
-    // BASIC 179–180
+    // ------------------------------------------------------------
+    // BASIC 179–180: final results
+    // ------------------------------------------------------------
     st_.T1 = S4 * (T1sum + I6);
     st_.T2 = S4 * T2sum;
-
-    (void)FVS; // används först när vi lägger in exact-kernel
-
-    if (Kimg < 0) {
-        std::cout << "K=-1: X1.z=" << X1.z
-                  << " Ru.z(beforeK?)=" << (Ru.z/(double)Kimg)
-                  << " Ru.z(after)=" << Ru.z << "\n";
-    }
 }
 
+static inline bool nearlyEqual(double a, double b, double eps = 1e-9)
+{
+    return std::abs(a - b) <= eps;
+}
 
 void Mininec3Compat::psiVector(double P1, double P2, double P3, int P4, int Kimg)
 {
+    // BASIC 102: FVS = 0
     int FVS = 0;
 
     if (P4 == 0)
@@ -223,41 +297,52 @@ void Mininec3Compat::psiVector(double P1, double P2, double P3, int P4, int Kimg
         return;
     }
 
-
-    // BASIC 103–108 special case
+    // -------------------------------
+    // BASIC 103–108: thin-wire vector self special
+    // IF K < 1 THEN 109
+    // IF A(P4) >= SRM THEN 109
+    // IF (I = J AND P3 = P2 + .5) THEN 106
+    // -------------------------------
     if (Kimg >= 1)
     {
         if (st_.A[P4] < st_.SRM)
         {
-            auto isHalfStep = [&](double a, double b) {
-                return std::abs((a - b) - 0.5) < 1e-6;
-            };
+            bool samePulse = (st_.curI == st_.curJ);
 
-            if (st_.curI == st_.curJ && isHalfStep(P3, P2))
+            // BASIC: P3 = P2 + 0.5
+            if (samePulse && nearlyEqual(P3, P2 + 0.5))
             {
-                ++hits;
-                std::cout << "hits = " << hits << std::endl;
-
                 st_.T1 = std::log(st_.S[P4] / st_.A[P4]);
                 st_.T2 = -st_.W * st_.S[P4] / 2.0;
+
+                // Debug counter (optional)
+                st_.psiVectorHits++;
+
+                std::cout << "psiVector self special HIT: curI=" << st_.curI
+                          << " curJ=" << st_.curJ
+                          << " P2=" << P2 << " P3=" << P3
+                          << " P4=" << P4
+                          << " A=" << st_.A[P4] << " SRM=" << st_.SRM
+                          << "\n";
+
                 return;
             }
         }
     }
 
-    // BASIC 109–111: X1 = X(P1) (integer point)
-    Vec3 X1 = pointFromP_Basic(P1, +1);
+    // -------------------------------
+    // BASIC 109–112: X1 = X(P1),Y(P1),Z(P1) (NO K on Z here!)
+    // -------------------------------
+    Vec3 X1 = pointFromP_Basic(P1, +1); // IMPORTANT: K=+1 to avoid mirroring observation point
 
-    // jump to core (BASIC 113)
+    // Jump to shared core (BASIC 113)
     psiCore102_28(X1, P2, P3, P4, Kimg, FVS);
 }
 
-
 void Mininec3Compat::psiScalar(double P1, double P2, double P3, int P4, int Kimg)
 {
-    // BASIC 87
+    // BASIC 87: FVS = 1
     int FVS = 1;
-    (void)FVS; // används i 102 för exact-kernel val, vi tar in senare
 
     if (P4 == 0)
     {
@@ -266,14 +351,20 @@ void Mininec3Compat::psiScalar(double P1, double P2, double P3, int P4, int Kimg
         return;
     }
 
+    // -------------------------------
     // BASIC 88–93: thin-wire scalar self special
+    // IF K < 1 THEN 94
+    // IF A(P4) > SRM THEN 94
+    // IF (P3 = P2 + 1 AND P1 = (P2 + P3)/2) THEN 91
+    // -------------------------------
     if (Kimg >= 1)
     {
         if (st_.A[P4] <= st_.SRM)
         {
-            // (P3 = P2 + 1 AND P1 = (P2 + P3)/2)
-            if (std::abs(P3 - (P2 + 1.0)) < 1e-9 &&
-                std::abs(P1 - (P2 + P3) * 0.5) < 1e-9)
+            bool cond1 = nearlyEqual(P3, P2 + 1.0);
+            bool cond2 = nearlyEqual(P1, 0.5 * (P2 + P3));
+
+            if (cond1 && cond2)
             {
                 st_.T1 = 2.0 * std::log(st_.S[P4] / st_.A[P4]);
                 st_.T2 = -st_.W * st_.S[P4];
@@ -282,18 +373,20 @@ void Mininec3Compat::psiScalar(double P1, double P2, double P3, int P4, int Kimg
         }
     }
 
-    // BASIC 94–98: P1 is half-integer -> midpoint between INT(P1) and INT(P1)+1
-    // In scalar calls, P1 is like N+0.5, so INT(P1)=N.
-    int I4 = (int)std::floor(P1);
+    // -------------------------------
+    // BASIC 94–98: midpoint between INT(P1) and INT(P1)+1
+    // X1 = (X(I4)+X(I5))/2  (NO K on X1.z here!)
+    // -------------------------------
+    int I4 = (int)std::floor(P1 + 1e-12);
     int I5 = I4 + 1;
 
     Vec3 X1;
     X1.x = 0.5 * (st_.BX[I4] + st_.BX[I5]);
     X1.y = 0.5 * (st_.BY[I4] + st_.BY[I5]);
-    X1.z = 0.5 * (st_.BZ[I4] + st_.BZ[I5]);
+    X1.z = 0.5 * (st_.BZ[I4] + st_.BZ[I5]); // IMPORTANT: no K here
 
-    // and then jump into the shared core (BASIC GOTO 113)
-    psiCore102_28(X1, P2, P3, P4, Kimg, /*FVS=*/1);
+    // Jump into shared core (BASIC 113)
+    psiCore102_28(X1, P2, P3, P4, Kimg, FVS);
 }
 
 
@@ -318,6 +411,13 @@ void Mininec3Compat::computeZijForImage(int I, int J, int K,
     // (valfritt) debug
     // if (J1==0 || J2==0)
     //     std::cout << "DEBUG: J1="<<J1<<" J2="<<J2<<" for I="<<I<<" J="<<J<<"\n";
+
+    std::cout << "DEBUG S: S[J1]=" << st_.S[J1]
+              << " S[J2]=" << st_.S[J2]
+              << " Ssafe(J1)=" << Ssafe(st_, J1)
+              << " Ssafe(J2)=" << Ssafe(st_, J2)
+              << "\n";
+
 
     int pI = I + 1;
     int pJ = J + 1;
@@ -390,8 +490,19 @@ void Mininec3Compat::computeZijForImage(int I, int J, int K,
     P1 = P1 - 1.0;
     psiScalar(P1, P2, P3, P4, K);
 
-    U1 = (st_.T1 - U5) / Ssafe(st_, J2);
-    U2 = (st_.T2 - U6) / Ssafe(st_, J2);
+    // U1 = (st_.T1 - U5) / Ssafe(st_, J2);
+    // U2 = (st_.T2 - U6) / Ssafe(st_, J2);
+
+    if (J2 != 0)
+    {
+        U1 = (st_.T1 - U5) / st_.S[J2];
+        U2 = (st_.T2 - U6) / st_.S[J2];
+    }
+    else
+    {
+        U1 = 0.0;
+        U2 = 0.0;
+    }
 
     P1 = P1 + 1.0;
     P3 = P2;
@@ -413,60 +524,53 @@ void Mininec3Compat::computeZijForImage(int I, int J, int K,
         psiScalar(P1, P2, P3, P4, K);
     }
 
-    U1 = U1 + (U3 - st_.T1) / Ssafe(st_, J1);
-    U2 = U2 + (U4 - st_.T2) / Ssafe(st_, J1);
+    // U1 = U1 + (U3 - st_.T1) / Ssafe(st_, J1);
+    // U2 = U2 + (U4 - st_.T2) / Ssafe(st_, J1);
+
+    if (J1 != 0)
+    {
+        U1 = U1 + (U3 - st_.T1) / st_.S[J1];
+        U2 = U2 + (U4 - st_.T2) / st_.S[J1];
+    }
 
     st_.ZR[I][J] += (double)K * (D1 + U1);
     st_.ZI[I][J] += (double)K * (D2 + U2);
 }
 
-
-// void Mininec3Compat::applySymmetryAndToeplitzCopy(int I, int J, int F8, int J2)
-// {
-//     if (J < I) return;
-
-//     if (J >= I) {
-//         st_.ZR[J][I] = st_.ZR[I][J];
-//         st_.ZI[J][I] = st_.ZI[I][J];
-//     }
-//     if (F8 == 0) return;
-
-//     // if (F8 == 0) return;
-
-//     // st_.ZR[J][I] = st_.ZR[I][J];
-//     // st_.ZI[J][I] = st_.ZI[I][J];
-
-//     int P1 = J + 1;
-//     if (P1 >= st_.N) return;
-
-//     if (st_.C[P1][0] != st_.C[P1][1]) return;
-
-//     if (st_.C[P1][1] != st_.C[J][1])
-//     {
-//         if (st_.C[P1][1] != -st_.C[J][1]) return;
-//         // if ((st_.CA[J2] + st_.CB[J2]) != 0) return;
-//         if (std::abs(st_.CA[J2] + st_.CB[J2]) > 1e-12) return;
-//     }
-
-//     int P2 = I + 1;
-//     if (P2 >= st_.N) return;
-
-//     st_.ZR[P2][P1] = st_.ZR[I][J];
-//     st_.ZI[P2][P1] = st_.ZI[I][J];
-// }
-
 void Mininec3Compat::applySymmetryAndToeplitzCopy(int I, int J, int F8, int J2)
 {
+    // BASIC 317
     if (J < I) return;
 
-    // alltid symmetri
+    // BASIC 318
+    if (F8 == 0) return;
+
+    // BASIC 319–320 reciprocity
     st_.ZR[J][I] = st_.ZR[I][J];
     st_.ZI[J][I] = st_.ZI[I][J];
 
-    // DEBUG: stäng av Toeplitz-copy
-    return;
-}
+    // BASIC 322–323
+    int P1 = J + 1;
+    if (P1 >= st_.N) return;
 
+    // BASIC 324
+    if (st_.C[P1][0] != st_.C[P1][1]) return;
+
+    // BASIC 325–327
+    if (st_.C[P1][1] != st_.C[J][1])
+    {
+        if (st_.C[P1][1] != -st_.C[J][1]) return;
+        if (std::abs(st_.CA[J2] + st_.CB[J2]) > 1e-12) return;
+    }
+
+    // BASIC 328–329
+    int P2 = I + 1;
+    if (P2 >= st_.N) return;
+
+    // BASIC 330–331
+    st_.ZR[P2][P1] = st_.ZR[I][J];
+    st_.ZI[P2][P1] = st_.ZI[I][J];
+}
 
 void Mininec3Compat::buildZ()
 {
@@ -486,6 +590,7 @@ void Mininec3Compat::buildZ()
 
             int cJ1 = st_.C[J][0];
             int cJ2 = st_.C[J][1];
+
             int J1 = std::abs(cJ1);
             int J2 = std::abs(cJ2);
 
@@ -495,38 +600,43 @@ void Mininec3Compat::buildZ()
             double F6 = 1.0;
             double F7 = 1.0;
 
-            // Beräkna F8 en gång (för hela (I,J))
-            int F8 = computeF8flag(I, J, I1, I2, J1, J2);
-
-            // Nollställ innan vi summerar K
-            st_.ZR[I][J] = 0.0;
-            st_.ZI[I][J] = 0.0;
-
-            st_.WpulseScratchObs = st_.Wpulse[I];
-            st_.WpulseScratchSrc = st_.Wpulse[J];
-
-            if (cJ1 == -cJ2)
+            // BASIC: image loop FOR K = 1 TO G STEP -2
+            for (int K : {+1, -1})
             {
-                // special: bara K=+1
-                F6 = F4;
-                F7 = F5;
-                computeZijForImage(I, J, +1, I1, I2, J1, J2, F4, F5, F6, F7, F8);
-            }
-            else
-            {
-                // normal: summera K=+1 och K=-1
-                computeZijForImage(I, J, +1, I1, I2, J1, J2, F4, F5, F6, F7, F8);
-                computeZijForImage(I, J, -1, I1, I2, J1, J2, F4, F5, F6, F7, F8);
-            }
+                // BASIC 231–234
+                if (cJ1 == -cJ2)
+                {
+                    if (K < 0) break;
+                    F6 = F4;
+                    F7 = F5;
+                }
 
-            // Kopiera först när Z[I][J] är färdig
-            applySymmetryAndToeplitzCopy(I, J, F8, J2);
+                // BASIC 235–245
+                int F8 = 0;
+                if (K >= 0)
+                    F8 = computeF8flag(I, J, I1, I2, J1, J2);
+
+                // BASIC 246: reuse
+                if (st_.ZR[I][J] != 0.0)
+                {
+                    applySymmetryAndToeplitzCopy(I, J, F8, J2);
+                    continue;
+                }
+
+                // BASIC scratch wires used by exact kernel logic
+                st_.WpulseScratchObs = st_.Wpulse[I];
+                st_.WpulseScratchSrc = st_.Wpulse[J];
+
+                // BASIC 248–316
+                computeZijForImage(I, J, K, I1, I2, J1, J2, F4, F5, F6, F7, F8);
+
+                // BASIC 317–331
+                applySymmetryAndToeplitzCopy(I, J, F8, J2);
+            }
         }
     }
-
-    std::cout << " BuildZ:  No of hits = " << hits << std::endl;
-
 }
+
 
 Vec3 Mininec3Compat::pointFromP_Basic(double P, int /*Kimg*/) const
 {
